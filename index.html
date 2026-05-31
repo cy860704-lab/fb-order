@@ -1,0 +1,496 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>代購喊單整理工具</title>
+<style>
+* { box-sizing: border-box; }
+body { font-family: system-ui, -apple-system, sans-serif; margin: 0; padding: 16px; background: #f5f5f5; color: #111; max-width: 800px; margin: 0 auto; }
+h1 { font-size: 18px; font-weight: 700; margin: 0 0 16px; color: #333; }
+.slabel { font-size: 13px; font-weight: 500; color: #555; margin: 0 0 6px; }
+.card { background: #fff; border: 1px solid #e0e0e0; border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+.post-block { border: 1px solid #e0e0e0; border-radius: 8px; padding: 12px; margin-bottom: 10px; background: #fafafa; }
+.post-header { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
+input, textarea, button, select { font-family: inherit; font-size: 13px; }
+input[type="text"], input[type="number"] {
+  border: 1px solid #ccc; border-radius: 6px; padding: 7px 10px;
+  background: #fff; color: #111; outline: none; transition: border 0.2s;
+}
+input:focus { border-color: #f4a261; }
+textarea { border: 1px solid #ccc; border-radius: 6px; padding: 8px 10px; background: #fff; color: #111; outline: none; width: 100%; resize: vertical; }
+textarea:focus { border-color: #f4a261; }
+button {
+  border: 1px solid #ccc; border-radius: 6px; padding: 7px 14px;
+  background: #f0f0f0; color: #333; cursor: pointer; transition: background 0.2s;
+}
+button:hover { background: #e0e0e0; }
+button.primary { background: #f4a261; border-color: #e8956a; color: #fff; font-weight: 600; }
+button.primary:hover { background: #e8956a; }
+.del-btn { background: none; border: 1px solid #ddd; border-radius: 6px; padding: 4px 10px; font-size: 12px; color: #888; white-space: nowrap; flex-shrink: 0; }
+.del-btn:hover { background: #fee; border-color: #f99; color: #c00; }
+.order-table { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; margin-bottom: 1.5rem; }
+.order-table th { background: #f4a261; color: #4a1b0c; padding: 7px 10px; text-align: left; border: 1px solid #e8956a; font-weight: 600; }
+.order-table td { padding: 7px 10px; border: 1px solid #e0e0e0; word-break: break-word; }
+.total-row td { background: #ffd166; color: #412402; font-weight: 600; }
+#copy-area { width: 100%; font-size: 12px; font-family: monospace; border: 1px solid #ccc; border-radius: 6px; padding: 10px; background: #fafafa; }
+.alias-row { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; font-size: 12px; flex-wrap: wrap; }
+.alias-badge { background: #f0f0f0; border: 1px solid #ddd; border-radius: 4px; padding: 2px 8px; color: #666; font-size: 12px; }
+.alias-builtin { opacity: 0.5; }
+.remove-alias { cursor: pointer; color: #999; font-size: 11px; background: none; border: none; padding: 0 4px; }
+.remove-alias:hover { color: #c00; }
+.status-pill { font-size: 11px; border-radius: 12px; padding: 2px 10px; margin-left: 8px; display: none; font-weight: 500; }
+.summary-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.summary-table th { background: #4a90d9; color: #fff; padding: 7px 12px; text-align: left; border: 1px solid #357abd; }
+.summary-table td { padding: 7px 12px; border: 1px solid #e0e0e0; }
+.summary-table tr:nth-child(even) td { background: #f5f8ff; }
+.summary-section { margin-bottom: 1.2rem; }
+.summary-section-title { font-size: 13px; font-weight: 600; color: #555; margin: 0 0 5px; }
+#error-msg { display: none; font-size: 13px; color: #c62828; margin-top: 8px; padding: 10px; border-radius: 8px; background: #ffebee; border: 1px solid #ffcdd2; }
+.divider { border: none; border-top: 1px solid #eee; margin: 8px 0; }
+</style>
+</head>
+<body>
+
+<h1>🛒 代購喊單整理工具</h1>
+
+<!-- 老闆名字 -->
+<div class="card">
+  <p class="slabel">你的名字（會被略過）</p>
+  <input id="owner-name" type="text" placeholder="例如：楊巧寧" style="width:100%;" />
+</div>
+
+<!-- 暱稱對照表 -->
+<div class="card">
+  <div style="display:flex; align-items:center; margin-bottom:8px;">
+    <p class="slabel" style="margin:0;">角色暱稱對照表</p>
+    <span id="status-pill" class="status-pill"></span>
+  </div>
+  <div id="alias-list" style="margin-bottom:10px;"></div>
+  <hr class="divider" />
+  <p class="slabel" style="margin-top:8px;">新增暱稱</p>
+  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+    <input id="alias-from" type="text" placeholder="顧客會打的（例：團兵漢）" style="flex:2; min-width:100px;" />
+    <span style="color:#999;">→</span>
+    <input id="alias-to" type="text" placeholder="標準名，多個用逗號：艾爾文,里維,漢吉" style="flex:3; min-width:130px;" />
+    <button onclick="addAlias()">+ 新增</button>
+  </div>
+  <p style="font-size:11px; color:#999; margin:6px 0 0;">新增後永久儲存到 Firebase，任何裝置打開都在。內建的（灰色）無法刪除。</p>
+</div>
+
+<!-- 品項貼文 -->
+<div class="card">
+  <p class="slabel">每個品項貼文的留言區（可新增多個）</p>
+  <div id="posts-container"></div>
+  <button onclick="addPost()" style="margin-top:6px;">+ 新增一個品項貼文</button>
+</div>
+
+<!-- 整理按鈕 -->
+<button class="primary" onclick="parseAll()" style="width:100%; font-size:15px; padding:12px; margin-bottom:1rem;">
+  整理所有訂單 ↗
+</button>
+
+<!-- 結果區 -->
+<div id="result-area" style="display:none;">
+
+  <!-- 個人訂單 -->
+  <div id="orders-container"></div>
+
+  <!-- Excel 複製 -->
+  <div class="card">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <p class="slabel" style="margin:0;">複製貼進 Excel</p>
+      <button onclick="selectAll()" style="font-size:12px;">全選</button>
+    </div>
+    <p style="font-size:12px; color:#999; margin:0 0 8px;">點文字框 → 全選 → 複製 → 貼到 Excel（Tab 分隔，自動對齊欄位）</p>
+    <textarea id="copy-area" rows="10" readonly></textarea>
+  </div>
+
+  <!-- 總表 -->
+  <div class="card" style="border:2px solid #4a90d9;">
+    <p class="slabel" style="font-size:14px; color:#4a90d9; margin-bottom:12px;">📊 所有品項喊單總計</p>
+    <div id="summary-container"></div>
+  </div>
+
+</div>
+
+<div id="error-msg"></div>
+
+<script type="module">
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js';
+import { getFirestore, doc, getDoc, setDoc } from 'https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js';
+
+const firebaseConfig = {
+  apiKey: "AIzaSyBH93as6UXG-TnV7Nn6JnAVQmv0hdTBhRg",
+  authDomain: "fb-order-c44a3.firebaseapp.com",
+  projectId: "fb-order-c44a3",
+  storageBucket: "fb-order-c44a3.firebasestorage.app",
+  messagingSenderId: "564538055828",
+  appId: "1:564538055828:web:0404f27d08a0207ae7e881"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const DOC_REF = doc(db, 'settings', 'aliases');
+
+let postCount = 0;
+let finalOrders = {};
+
+// ── 內建暱稱 ──────────────────────────────────
+const BUILTIN_SINGLE = {
+  '兵長': ['里維'], '団長': ['艾爾文'], '團長': ['艾爾文'],
+  '艾倫': ['艾連'], '韓吉': ['漢吉'], '韓季': ['漢吉'],
+};
+const BUILTIN_GROUP = {
+  '團兵': ['艾爾文','里維'], '团兵': ['艾爾文','里維'],
+  '里漢': ['里維','漢吉'], '里漢吉': ['里維','漢吉'],
+  '艾漢': ['艾連','漢吉'], '艾里': ['艾連','里維'],
+};
+const THANK_YOU_WORDS = ['謝謝','謝謝你','謝謝妳','感謝','thank you','thanks','thx','ty'];
+
+let customAliases = {};
+
+// ── Firebase 儲存/載入 ────────────────────────
+function showStatus(msg, color, bg) {
+  const el = document.getElementById('status-pill');
+  el.textContent = msg;
+  el.style.color = color;
+  el.style.background = bg;
+  el.style.display = 'inline';
+  setTimeout(() => el.style.display = 'none', 2500);
+}
+
+async function saveAliases() {
+  try {
+    await setDoc(DOC_REF, { data: customAliases });
+    showStatus('✓ 已永久儲存', '#2e7d32', '#e8f5e9');
+  } catch(e) {
+    showStatus('⚠ 儲存失敗', '#c62828', '#ffebee');
+    console.error(e);
+  }
+}
+
+async function loadAliases() {
+  showStatus('載入中...', '#555', '#eee');
+  try {
+    const snap = await getDoc(DOC_REF);
+    if (snap.exists() && snap.data().data) {
+      customAliases = snap.data().data;
+      showStatus('✓ 已載入暱稱', '#1565c0', '#e3f2fd');
+    } else {
+      customAliases = {};
+      showStatus('（尚無儲存的暱稱）', '#888', '#f5f5f5');
+    }
+  } catch(e) {
+    customAliases = {};
+    showStatus('⚠ 載入失敗: ' + e.message, '#c62828', '#ffebee');
+  }
+  renderAliasList();
+}
+
+// ── 暱稱對照表 UI ─────────────────────────────
+function getAllAliases() {
+  return { ...BUILTIN_SINGLE, ...BUILTIN_GROUP, ...customAliases };
+}
+
+function renderAliasList() {
+  const el = document.getElementById('alias-list');
+  el.innerHTML = '';
+  const builtinItems = { ...BUILTIN_SINGLE, ...BUILTIN_GROUP };
+  const allItems = { ...builtinItems, ...customAliases };
+  if (Object.keys(allItems).length === 0) {
+    el.innerHTML = '<span style="font-size:12px;color:#999">尚無暱稱</span>';
+    return;
+  }
+  Object.entries(allItems).forEach(([from, toArr]) => {
+    const isBuiltin = !!builtinItems[from];
+    const row = document.createElement('div');
+    row.className = 'alias-row';
+    const safeFrom = from.replace(/'/g, "\\'");
+    row.innerHTML = `
+      <span class="alias-badge ${isBuiltin ? 'alias-builtin' : ''}">${from}</span>
+      <span style="color:#bbb">→</span>
+      <span style="font-size:12px; color:#333;">${toArr.join('、')}</span>
+      ${!isBuiltin ? `<button class="remove-alias" onclick="window._removeAlias('${safeFrom}')">✕</button>` : ''}
+    `;
+    el.appendChild(row);
+  });
+}
+
+window._removeAlias = function(key) {
+  delete customAliases[key];
+  saveAliases();
+  renderAliasList();
+};
+
+window.addAlias = function() {
+  const from = document.getElementById('alias-from').value.trim();
+  const toRaw = document.getElementById('alias-to').value.trim();
+  if (!from || !toRaw) { showError('請填入暱稱和對應的標準名！'); return; }
+  const toArr = toRaw.split(/[,，、]/).map(s => s.trim()).filter(s => s.length > 0);
+  customAliases[from] = toArr;
+  saveAliases();
+  renderAliasList();
+  document.getElementById('alias-from').value = '';
+  document.getElementById('alias-to').value = '';
+  document.getElementById('error-msg').style.display = 'none';
+};
+
+// ── 品項貼文 ──────────────────────────────────
+window.addPost = function() {
+  postCount++;
+  const id = postCount;
+  const div = document.createElement('div');
+  div.className = 'post-block';
+  div.id = 'post-' + id;
+  div.innerHTML = `
+    <div class="post-header">
+      <input type="text" id="ptype-${id}" placeholder="品項類型，例如：立牌、徽章" style="flex:2; min-width:0;" />
+      <input type="number" id="pprice-${id}" placeholder="單價" style="width:80px; flex-shrink:0;" />
+      <button class="del-btn" onclick="window._removePost(${id})">✕ 刪除</button>
+    </div>
+    <textarea id="ptext-${id}" rows="6" placeholder="直接從 FB 複製貼上，連結和時間會自動清除"></textarea>
+  `;
+  document.getElementById('posts-container').appendChild(div);
+};
+
+window._removePost = function(id) { document.getElementById('post-' + id)?.remove(); };
+
+// ── FB 文字清理 ───────────────────────────────
+function cleanFBText(raw) {
+  return raw
+    .replace(/\[([^\]]+)\]\(https?:\/\/[^\)]+\)/g, '$1')
+    .replace(/^\*.*$/gm, '')
+    .replace(/^\d+[天週周小時分秒]+前?$/gm, '')
+    .replace(/^\d+[dwhmsDWHMS]$/gm, '')
+    .replace(/^(讚|回覆|已編輯|Like|Reply|Comment)$/gm, '')
+    .replace(/-R\)/g, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+function isThankYou(text) {
+  const t = text.trim().toLowerCase().replace(/[！!。，,～~\s]/g, '');
+  return THANK_YOU_WORDS.some(w => t === w.replace(/\s/g,'') || t.startsWith(w.replace(/\s/g,'')));
+}
+
+// ── 暱稱解析 ──────────────────────────────────
+function resolveAlias(name, aliases) {
+  if (aliases[name]) return aliases[name];
+  let result = name;
+  for (const [alias, arr] of Object.entries(aliases)) {
+    if (arr.length === 1) result = result.replace(new RegExp(alias, 'g'), arr[0]);
+  }
+  return [result];
+}
+
+function splitNames(text, aliases) {
+  if (aliases[text]) return aliases[text];
+  const knownNames = new Set();
+  Object.values(aliases).flat().forEach(n => knownNames.add(n));
+  Object.keys(aliases).forEach(k => knownNames.add(k));
+  const sorted = [...knownNames].sort((a, b) => b.length - a.length);
+  const result = [];
+  let remaining = text;
+  while (remaining.length > 0) {
+    let matched = false;
+    for (const name of sorted) {
+      if (remaining.startsWith(name)) {
+        resolveAlias(name, aliases).forEach(n => result.push(n));
+        remaining = remaining.slice(name.length);
+        matched = true; break;
+      }
+    }
+    if (!matched) { result.push(remaining[0]); remaining = remaining.slice(1); }
+  }
+  return result;
+}
+
+function expandLine(line, ownerName) {
+  const cleaned = line.replace(ownerName, '').trim();
+  if (!cleaned || isThankYou(cleaned)) return [];
+  const aliases = getAllAliases();
+
+  // 各一 / 各N
+  const kakuMatch = cleaned.match(/^(.+?)各\s*(\d+|一)$/);
+  if (kakuMatch) {
+    const qty = kakuMatch[2] === '一' ? 1 : parseInt(kakuMatch[2]);
+    const names = splitNames(kakuMatch[1].trim(), aliases);
+    const result = [];
+    names.forEach(n => { for (let i = 0; i < qty; i++) result.push(n); });
+    return result;
+  }
+
+  if (aliases[cleaned]) return [...aliases[cleaned]];
+
+  // 分割多角色
+  const seg = cleaned
+    .replace(/([×xX\*\+]\s*\d+)\s*(?=[^\d×xX\*\+、，,\s])/g, '$1§')
+    .replace(/[、，,]+/g, '§');
+
+  const parts = seg.split('§').map(s => s.trim()).filter(s => s.length > 0);
+  const result = [];
+  for (const part of parts) {
+    const qtyMatch = part.match(/[×xX\*\+]\s*(\d+)|(\d+)\s*[個件支]/);
+    const qty = qtyMatch ? parseInt(qtyMatch[1] || qtyMatch[2]) : 1;
+    const variantRaw = part.replace(/[×xX\*\+]\s*\d+|\d+\s*[個件支]/g, '').trim();
+    if (isThankYou(variantRaw)) continue;
+    const resolved = resolveAlias(variantRaw, aliases);
+    resolved.forEach(n => { for (let i = 0; i < qty; i++) result.push(n); });
+  }
+  return result;
+}
+
+// ── 解析留言 ──────────────────────────────────
+function parsePost(ptype, pprice, raw, ownerName) {
+  const price = parseInt(pprice) || null;
+  const cleaned = cleanFBText(raw);
+  const blocks = cleaned.split(/\n\s*\n/).map(b => b.trim()).filter(b => b.length > 0);
+  const results = [];
+  for (const block of blocks) {
+    const lines = block.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length < 2) continue;
+    const customerName = lines[0];
+    if (customerName === ownerName) continue;
+    for (let i = 1; i < lines.length; i++) {
+      if (isThankYou(lines[i])) continue;
+      expandLine(lines[i], ownerName).forEach(name =>
+        results.push({ customer: customerName, product: name + ptype, price, ptype })
+      );
+    }
+  }
+  return results;
+}
+
+// ── 主要整理邏輯 ──────────────────────────────
+window.parseAll = function() {
+  const ownerName = document.getElementById('owner-name').value.trim();
+  if (!ownerName) { showError('請填入你的名字！'); return; }
+  const posts = document.querySelectorAll('.post-block');
+  if (posts.length === 0) { showError('請先新增至少一個品項貼文！'); return; }
+
+  finalOrders = {};
+  posts.forEach(post => {
+    const id = post.id.replace('post-', '');
+    const ptype = document.getElementById('ptype-' + id).value.trim() || '未知品項';
+    const pprice = document.getElementById('pprice-' + id).value;
+    const raw = document.getElementById('ptext-' + id).value.trim();
+    if (!raw) return;
+    parsePost(ptype, pprice, raw, ownerName).forEach(item => {
+      if (!finalOrders[item.customer]) finalOrders[item.customer] = [];
+      finalOrders[item.customer].push(item);
+    });
+  });
+
+  if (Object.keys(finalOrders).length === 0) {
+    showError('找不到任何訂單。請確認：留言之間有空行、你的名字填對了。');
+    return;
+  }
+  renderResult();
+  buildCopyText();
+  buildSummary();
+  document.getElementById('error-msg').style.display = 'none';
+  document.getElementById('result-area').style.display = 'block';
+  document.getElementById('result-area').scrollIntoView({ behavior: 'smooth' });
+};
+
+// ── 渲染個人訂單 ──────────────────────────────
+function renderResult() {
+  const container = document.getElementById('orders-container');
+  container.innerHTML = '';
+  Object.entries(finalOrders).forEach(([customer, items]) => {
+    const subtotal = items.reduce((s, it) => s + (it.price || 0), 0);
+    const rows = items.map((it, idx) => `
+      <tr>
+        <td>${idx === 0 ? customer : ''}</td>
+        <td>${it.product}</td>
+        <td style="text-align:right;">${it.price !== null ? it.price : '—'}</td>
+        <td></td><td></td>
+      </tr>`).join('');
+    const table = document.createElement('table');
+    table.className = 'order-table';
+    table.innerHTML = `
+      <thead><tr>
+        <th style="width:18%">姓名</th>
+        <th style="width:32%">品項</th>
+        <th style="width:15%">台幣價錢</th>
+        <th style="width:15%">國內運費</th>
+        <th style="width:20%">備註</th>
+      </tr></thead>
+      <tbody>${rows}
+        <tr class="total-row">
+          <td></td><td>小計</td>
+          <td style="text-align:right;">${subtotal}</td>
+          <td>（手動填）</td><td>待付款</td>
+        </tr>
+      </tbody>`;
+    container.appendChild(table);
+  });
+}
+
+// ── 總表 ──────────────────────────────────────
+function buildSummary() {
+  const countMap = {};
+  Object.values(finalOrders).forEach(items => {
+    items.forEach(it => {
+      if (!countMap[it.product]) countMap[it.product] = { count: 0, ptype: it.ptype };
+      countMap[it.product].count++;
+    });
+  });
+  const byType = {};
+  Object.entries(countMap).forEach(([product, { count, ptype }]) => {
+    if (!byType[ptype]) byType[ptype] = [];
+    byType[ptype].push({ product, count });
+  });
+  Object.values(byType).forEach(arr => arr.sort((a, b) => b.count - a.count));
+
+  const container = document.getElementById('summary-container');
+  container.innerHTML = '';
+  Object.entries(byType).forEach(([ptype, items]) => {
+    const section = document.createElement('div');
+    section.className = 'summary-section';
+    const total = items.reduce((s, i) => s + i.count, 0);
+    section.innerHTML = `
+      <p class="summary-section-title">${ptype}（共 ${total} 個）</p>
+      <table class="summary-table">
+        <thead><tr><th>品項</th><th style="text-align:right;width:80px;">數量</th></tr></thead>
+        <tbody>${items.map(i =>
+          `<tr><td>${i.product}</td><td style="text-align:right;font-weight:600;">${i.count}</td></tr>`
+        ).join('')}</tbody>
+      </table>`;
+    container.appendChild(section);
+  });
+}
+
+// ── Excel 複製文字 ────────────────────────────
+function buildCopyText() {
+  const lines = ['姓名\t品項\t台幣價錢\t台灣國內運費\t總額\t備註'];
+  const empty = '\t\t\t\t\t';
+  Object.entries(finalOrders).forEach(([customer, items]) => {
+    const subtotal = items.reduce((s, it) => s + (it.price || 0), 0);
+    items.forEach((it, idx) =>
+      lines.push([idx === 0 ? customer : '', it.product, it.price ?? '', '', '', ''].join('\t'))
+    );
+    lines.push(`\t小計\t${subtotal}\t\t${subtotal}\t待付款`);
+    lines.push(empty); lines.push(empty); lines.push(empty);
+  });
+  document.getElementById('copy-area').value = lines.join('\n');
+}
+
+window.selectAll = function() {
+  const ta = document.getElementById('copy-area');
+  ta.select(); ta.setSelectionRange(0, 99999);
+};
+
+function showError(msg) {
+  const el = document.getElementById('error-msg');
+  el.textContent = '⚠ ' + msg;
+  el.style.display = 'block';
+}
+
+// ── 初始化 ────────────────────────────────────
+loadAliases();
+window.addPost();
+</script>
+</body>
+</html>
